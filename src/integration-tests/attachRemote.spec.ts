@@ -21,6 +21,7 @@ import {
     gdbServerPath,
     fillDefaults,
 } from './utils';
+import { expect } from 'chai';
 
 describe('attach remote', function () {
     let dc: CdtDebugClient;
@@ -31,9 +32,13 @@ describe('attach remote', function () {
 
     beforeEach(async function () {
         dc = await standardBeforeEach('debugTargetAdapter.js');
-        gdbserver = cp.spawn(gdbServerPath, [':0', emptyProgram], {
-            cwd: testProgramsDir,
-        });
+        gdbserver = cp.spawn(
+            gdbServerPath,
+            [':0', emptyProgram, 'running-from-spawn'],
+            {
+                cwd: testProgramsDir,
+            }
+        );
         port = await new Promise<number>((resolve, reject) => {
             if (gdbserver.stderr) {
                 gdbserver.stderr.on('data', (data) => {
@@ -58,25 +63,15 @@ describe('attach remote', function () {
         await dc.stop();
     });
 
-    this.timeout(5000);
-    // Move the timeout out of the way if the adapter is going to be debugged.
-    if (process.env.INSPECT_DEBUG_ADAPTER) {
-        this.timeout(9999999);
-    }
-
     it('can attach remote and hit a breakpoint', async function () {
-        await dc.hitBreakpoint(
-            fillDefaults(this.test, {
-                program: emptyProgram,
-                target: {
-                    type: 'remote',
-                    parameters: [`localhost:${port}`],
-                } as TargetAttachArguments,
-            } as TargetAttachRequestArguments),
-            {
-                path: emptySrc,
-                line: 3,
-            }
-        );
+        const attachArgs = fillDefaults(this.test, {
+            program: emptyProgram,
+            target: {
+                type: 'remote',
+                parameters: [`localhost:${port}`],
+            } as TargetAttachArguments,
+        } as TargetAttachRequestArguments);
+        await dc.attachHitBreakpoint(attachArgs, { line: 3, path: emptySrc });
+        expect(await dc.evaluate('argv[1]')).to.contain('running-from-spawn');
     });
 });

@@ -19,6 +19,9 @@ jobs:
           gdb --version
           gcc --version
           gdbserver --version
+      - name: Enable ptrace so tests can attach to running processes, see attach.spec.ts
+        run: |
+          sudo sysctl kernel.yama.ptrace_scope=0
       - name: Build
         run: yarn
       - name: Build Test Programs
@@ -59,6 +62,9 @@ jobs:
         run: yarn
       - name: Build Test Programs
         run: make -C src/integration-tests/test-programs
+      - name: Use special Mocha settings on Windows tests
+        run: |
+          Copy -path .mocharc-windows-ci.json -destination .mocharc.json -verbose
       - name: Test
         run: yarn test-ci
       - name: Log file artifacts

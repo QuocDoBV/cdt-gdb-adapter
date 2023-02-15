@@ -1,5 +1,5 @@
 /*********************************************************************
- * Copyright (c) 2018 Ericsson and others
+ * Copyright (c) 2018, 2023 Ericsson and others
  *
  * This program and the accompanying materials are made
  * available under the terms of the Eclipse Public License 2.0
@@ -181,26 +181,11 @@ export const testProgramsDir = path.join(
     'test-programs'
 );
 
-function getAdapterAndArgs(adapter?: string): string {
-    const chosenAdapter = adapter !== undefined ? adapter : defaultAdapter;
-    let args: string = path.join(__dirname, '../../dist', chosenAdapter);
-    if (process.env.INSPECT_DEBUG_ADAPTER) {
-        args = '--inspect-brk ' + args;
-    }
-    return args;
-}
-
 export async function standardBeforeEach(
-    adapter?: string
+    adapter?: string,
+    extraArgs?: string[]
 ): Promise<CdtDebugClient> {
-    const dc: CdtDebugClient = new CdtDebugClient(
-        'node',
-        getAdapterAndArgs(adapter),
-        'cppdbg',
-        {
-            shell: true,
-        }
-    );
+    const dc: CdtDebugClient = new CdtDebugClient(adapter, extraArgs);
     await dc.start(debugServerPort);
     await dc.initializeRequest();
 
@@ -223,6 +208,7 @@ export function fillDefaults(
     args.openGdbConsole = openGdbConsole;
     args.gdbAsync = gdbAsync;
     args.gdbNonStop = gdbNonStop;
+    args.hardwareBreakpoint = hardwareBreakpoint;
     return args;
 }
 
@@ -239,17 +225,24 @@ export const gdbPath: string | undefined = getGdbPathCli();
 export const gdbServerPath: string = getGdbServerPathCli();
 export const debugServerPort: number | undefined = getDebugServerPortCli();
 export const defaultAdapter: string = getDefaultAdapterCli();
+export const hardwareBreakpoint: boolean =
+    process.argv.indexOf('--test-hw-breakpoint-on') !== -1;
 
 before(function () {
     // Run make once per mocha execution, unless --skip-make
     // is specified. On the CI we run with --skip-make and the
-    // make is its own explicit build step
+    // make is its own explicit build step for two reasons:
+    // 1. It makes it easier to see build errors in the make
+    // 2. On CI we get errors running make on Windows like
+    // ld.exe: cannot open output file empty.exe: Permission denied
+    // The second reason may be because sometimes empty.exe is left
+    // running after a remote test finishes.
     if (!skipMake) {
         cp.execSync('make', { cwd: testProgramsDir });
     }
 
-    if (gdbNonStop && os.platform() === 'win32') {
-        // non-stop unsupported on Windows
+    if ((gdbNonStop || hardwareBreakpoint) && os.platform() === 'win32') {
+        // skip tests that are unsupported on Windows
         this.skip();
     }
 });
@@ -268,6 +261,9 @@ beforeEach(function () {
         }
         if (gdbNonStop) {
             prefix += 'gdb-non-stop ';
+        }
+        if (hardwareBreakpoint) {
+            prefix += 'hw-breakpoint-on ';
         }
         if (prefix) {
             prefix = '/' + prefix.trim() + '/';

@@ -29,11 +29,6 @@ describe('launch', function () {
         await dc.stop();
     });
 
-    // Move the timeout out of the way if the adapter is going to be debugged.
-    if (process.env.INSPECT_DEBUG_ADAPTER) {
-        this.timeout(9999999);
-    }
-
     it('can launch and hit a breakpoint', async function () {
         await dc.hitBreakpoint(
             fillDefaults(this.test, {
@@ -77,6 +72,20 @@ describe('launch', function () {
                 path: emptySpaceSrc,
                 line: 3,
             }
+        );
+    });
+
+    it('provides a decent error if program is omitted', async function () {
+        const errorMessage = await new Promise<Error>((resolve, reject) => {
+            dc.launchRequest(
+                fillDefaults(this.test, {} as LaunchRequestArguments)
+            )
+                .then(reject)
+                .catch(resolve);
+        });
+
+        expect(errorMessage.message).to.satisfy((msg: string) =>
+            msg.includes('program must be specified')
         );
     });
 });
